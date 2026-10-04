@@ -4,7 +4,7 @@ import { z } from "zod";
 
 function createServer() {
 	const server = new McpServer({
-		name: "Authless Calculator",
+		name: "Portfolio Manage Tools",
 		version: "1.0.0",
 	});
 
@@ -14,44 +14,6 @@ function createServer() {
 		async ({ a, b }) => ({
 			content: [{ type: "text", text: String(a + b) }],
 		}),
-	);
-
-	server.registerTool(
-		"calculate",
-		{
-			inputSchema: z.object({
-				operation: z.enum(["add", "subtract", "multiply", "divide"]),
-				a: z.number(),
-				b: z.number(),
-			}),
-		},
-		async ({ operation, a, b }) => {
-			let result: number;
-			switch (operation) {
-				case "add":
-					result = a + b;
-					break;
-				case "subtract":
-					result = a - b;
-					break;
-				case "multiply":
-					result = a * b;
-					break;
-				case "divide":
-					if (b === 0)
-						return {
-							content: [
-								{
-									type: "text",
-									text: "Error: Cannot divide by zero",
-								},
-							],
-						};
-					result = a / b;
-					break;
-			}
-			return { content: [{ type: "text", text: String(result) }] };
-		},
 	);
 
 	return server;
