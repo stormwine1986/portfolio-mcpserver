@@ -10,14 +10,6 @@ function createServer() {
 	});
 
 	server.registerTool(
-		"add",
-		{ inputSchema: z.object({ a: z.number(), b: z.number() }) },
-		async ({ a, b }) => ({
-			content: [{ type: "text", text: String(a + b) }],
-		}),
-	);
-
-	server.registerTool(
 		"get_btcusd_value",
 		{
 			description: "获取 BTC 的当前现货价格，以 USD 计价。",
@@ -83,7 +75,7 @@ function createServer() {
 	server.registerTool(
 		"get_asserts_status",
 		{
-			description: "获取资产总计，以 CNY 计价。",
+			description: "获取资产组合的状态，包括资产总值等",
 			inputSchema: z.object({}),
 			outputSchema: z.object({
 				fields: z.array(
