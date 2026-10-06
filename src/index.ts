@@ -242,7 +242,10 @@ function createServer() {
 			try {
 				const now = new Date();
 				const baseline = now.toISOString().slice(0, 10).replaceAll("-", "");
-				const createdAt = now.toISOString().replace("T", " ").slice(0, 19);
+				const createdAt = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+					.toISOString()
+					.replace("T", " ")
+					.slice(0, 19);
 
 				await workerEnv.DB.prepare(
 					"INSERT INTO baseline (baseline, total, created_at) VALUES (?, ?, ?) ON CONFLICT(baseline) DO UPDATE SET total = excluded.total, created_at = excluded.created_at",
