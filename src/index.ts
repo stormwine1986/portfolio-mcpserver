@@ -21,6 +21,15 @@ function createServer() {
 		{
 			description: "获取 BTC 的当前现货价格，以 USD 计价。",
 			inputSchema: z.object({}),
+			outputSchema: z.object({
+				fields: z.array(
+					z.object({
+						name: z.string(),
+						value: z.string(),
+						description: z.string(),
+					}),
+				),
+			}),
 		},
 		async () => {
 			try {
@@ -47,17 +56,19 @@ function createServer() {
 					throw new Error("Coinbase returned an invalid BTC price");
 				}
 
-				return {
-					content: [
+				const output = {
+					fields: [
 						{
-							type: "text",
-							text: `BTC/USD 现货价格：${new Intl.NumberFormat("en-US", {
-								style: "currency",
-								currency: "USD",
-								maximumFractionDigits: 8,
-							}).format(price)}`,
+							name: "btcusd",
+							value: price.toFixed(2),
+							description: "BTC现货价格，以 USD 计价",
 						},
 					],
+				};
+
+				return {
+					content: [{ type: "text", text: JSON.stringify(output) }],
+					structuredContent: output,
 				};
 			} catch {
 				return {
