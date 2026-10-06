@@ -69,7 +69,7 @@ symbol 列的可能值
 
 ```sql
 TABLE "baseline"(
-  "baseline" TEXT, -- baseline ID, 格式 yyyyMMdd
+  "baseline" TEXT, -- baseline ID, 当前日期格式化为 yyyyMMdd
   "total" REAL, -- 资产总值，以 CNY 计价
   "created_at" TEXT, -- 创建时间，格式 2026-10-01 00:00:00
   PRIMARY KEY ("baseline")

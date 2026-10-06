@@ -223,6 +223,54 @@ function createServer() {
 		},
 	);
 
+	server.registerTool(
+		"create_baseline",
+		{
+			description: "创建或更新当日资产基线，总值以 CNY 计价。",
+			inputSchema: z.object({ total: z.number().finite() }),
+			outputSchema: z.object({
+				fields: z.array(
+					z.object({
+						name: z.string(),
+						value: z.string(),
+						description: z.string(),
+					}),
+				),
+			}),
+		},
+		async ({ total }) => {
+			try {
+				const now = new Date();
+				const baseline = now.toISOString().slice(0, 10).replaceAll("-", "");
+				const createdAt = now.toISOString().replace("T", " ").slice(0, 19);
+
+				await workerEnv.DB.prepare(
+					"INSERT INTO baseline (baseline, total, created_at) VALUES (?, ?, ?) ON CONFLICT(baseline) DO UPDATE SET total = excluded.total, created_at = excluded.created_at",
+				)
+					.bind(baseline, total, createdAt)
+					.run();
+
+				const output = {
+					fields: [
+						{ name: "baseline", value: baseline, description: "基线标识" },
+						{ name: "total", value: total.toFixed(2), description: "资产总值，CNY计价" },
+						{ name: "created_at", value: createdAt, description: "基线创建时间" },
+					],
+				};
+
+				return {
+					content: [{ type: "text", text: JSON.stringify(output) }],
+					structuredContent: output,
+				};
+			} catch {
+				return {
+					content: [{ type: "text", text: "创建资产基线失败，请检查数据库后重试。" }],
+					isError: true,
+				};
+			}
+		},
+	);
+
 	return server;
 }
 
