@@ -50,4 +50,19 @@ Update with this configuration:
 
 Restart Claude and you should see the tools become available.
 
+## portfolio 数据库结构
 
+```sql
+TABLE "assets"(
+  "name" TEXT NOT NULL, -- 资产名称
+  "shares" REAL NOT NULL, -- 份额
+  "avg_cost_price" REAL NOT NULL, -- 平均成本价格
+  "market_price" REAL NOT NULL, -- 市场价
+  "updated_at" TEXT NOT NULL, "symbol" TEXT, "Role" TEXT, "remarks" TEXT, "interest_rate" REAL,
+  PRIMARY KEY ("name")
+)
+```
+symbol 列的可能值
+- CNY 人民币计价
+- USD 美元计价
+- BTC 比特币计价
