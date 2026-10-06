@@ -73,6 +73,57 @@ function createServer() {
 	);
 
 	server.registerTool(
+		"get_usdcny_value",
+		{
+			description: "获取美元对人民币的当前汇率。",
+			inputSchema: z.object({}),
+			outputSchema: z.object({
+				fields: z.array(
+					z.object({
+						name: z.string(),
+						value: z.string(),
+						description: z.string(),
+					}),
+				),
+			}),
+		},
+		async () => {
+			try {
+				const response = await fetch("https://api.frankfurter.app/latest?from=USD&to=CNY", {
+					cache: "no-store",
+				});
+
+				if (!response.ok) {
+					throw new Error(`Frankfurter returned HTTP ${response.status}`);
+				}
+
+				const result = z
+					.object({ rates: z.object({ CNY: z.number().positive() }) })
+					.parse(await response.json());
+				const output = {
+					fields: [
+						{
+							name: "usdcny",
+							value: result.rates.CNY.toFixed(2),
+							description: "美元对人民币汇率",
+						},
+					],
+				};
+
+				return {
+					content: [{ type: "text", text: JSON.stringify(output) }],
+					structuredContent: output,
+				};
+			} catch {
+				return {
+					content: [{ type: "text", text: "获取美元/人民币汇率失败，请稍后重试。" }],
+					isError: true,
+				};
+			}
+		},
+	);
+
+	server.registerTool(
 		"get_asserts_status",
 		{
 			description: "获取资产组合的状态，包括资产总值等",
