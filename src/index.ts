@@ -170,28 +170,47 @@ function createServer() {
 				const database = workerEnv.DB;
 				const { results } = await database
 					.prepare(
-						"SELECT symbol, COALESCE(SUM(shares * market_price), 0) AS amount, COALESCE(SUM(CASE WHEN EXISTS (SELECT 1 FROM tags WHERE tags.name = assets.name AND tags.label = ?) THEN shares * market_price ELSE 0 END), 0) AS risk_amount FROM assets GROUP BY symbol",
+						"SELECT symbol, COALESCE(SUM(shares * market_price), 0) AS amount, COALESCE(SUM(CASE WHEN EXISTS (SELECT 1 FROM tags WHERE tags.name = assets.name AND tags.label = ?) THEN shares * market_price ELSE 0 END), 0) AS risk_amount, COALESCE(SUM(CASE WHEN Role = ? THEN shares * market_price ELSE 0 END), 0) AS insurance_amount FROM assets GROUP BY symbol",
 					)
-					.bind("风险资产")
-					.all<{ symbol: string | null; amount: number; risk_amount: number }>();
+					.bind("风险资产", "保险")
+					.all<{
+						symbol: string | null;
+						amount: number;
+						risk_amount: number;
+						insurance_amount: number;
+					}>();
 
-				const totals = new Map<string, { amount: number; riskAmount: number }>();
+				const totals = new Map<string, { amount: number; riskAmount: number; insuranceAmount: number }>();
 				for (const row of results) {
 					if (!row.symbol || !["CNY", "USD", "BTC"].includes(row.symbol)) {
 						throw new Error("Assets contain an unsupported currency symbol");
 					}
-					totals.set(row.symbol, { amount: row.amount, riskAmount: row.risk_amount });
+					totals.set(row.symbol, {
+						amount: row.amount,
+						riskAmount: row.risk_amount,
+						insuranceAmount: row.insurance_amount,
+					});
 				}
 
 				let totalCny = totals.get("CNY")?.amount ?? 0;
 				let riskTotalCny = totals.get("CNY")?.riskAmount ?? 0;
+				let insuranceTotalCny = totals.get("CNY")?.insuranceAmount ?? 0;
 				let nonCnyTotalCny = 0;
 				const usdTotal = totals.get("USD")?.amount ?? 0;
 				const usdRiskTotal = totals.get("USD")?.riskAmount ?? 0;
+				const usdInsuranceTotal = totals.get("USD")?.insuranceAmount ?? 0;
 				const btcTotal = totals.get("BTC")?.amount ?? 0;
 				const btcRiskTotal = totals.get("BTC")?.riskAmount ?? 0;
+				const btcInsuranceTotal = totals.get("BTC")?.insuranceAmount ?? 0;
 
-				if (usdTotal !== 0 || usdRiskTotal !== 0 || btcTotal !== 0 || btcRiskTotal !== 0) {
+				if (
+					usdTotal !== 0 ||
+					usdRiskTotal !== 0 ||
+					usdInsuranceTotal !== 0 ||
+					btcTotal !== 0 ||
+					btcRiskTotal !== 0 ||
+					btcInsuranceTotal !== 0
+				) {
 					const fxResponse = await fetch("https://api.frankfurter.app/latest?from=USD&to=CNY", {
 						cache: "no-store",
 					});
@@ -206,8 +225,9 @@ function createServer() {
 					nonCnyTotalCny += usdTotalCny;
 					totalCny += usdTotalCny;
 					riskTotalCny += usdRiskTotal * usdCny;
+					insuranceTotalCny += usdInsuranceTotal * usdCny;
 
-					if (btcTotal !== 0 || btcRiskTotal !== 0) {
+					if (btcTotal !== 0 || btcRiskTotal !== 0 || btcInsuranceTotal !== 0) {
 						const btcResponse = await fetch("https://api.coinbase.com/v2/prices/BTC-USD/spot", {
 							cache: "no-store",
 						});
@@ -231,12 +251,14 @@ function createServer() {
 						nonCnyTotalCny += btcTotalCny;
 						totalCny += btcTotalCny;
 						riskTotalCny += btcRiskTotal * btcUsd * usdCny;
+						insuranceTotalCny += btcInsuranceTotal * btcUsd * usdCny;
 					}
 				}
 
 				if (
 					!Number.isFinite(totalCny) ||
 					!Number.isFinite(riskTotalCny) ||
+					!Number.isFinite(insuranceTotalCny) ||
 					!Number.isFinite(nonCnyTotalCny)
 				) {
 					throw new Error("Asset total is not finite");
@@ -253,6 +275,11 @@ function createServer() {
 							name: "risk_exposure",
 							value: `${(totalCny === 0 ? 0 : (riskTotalCny / totalCny) * 100).toFixed(2)}%`,
 							description: "风险资产总值占资产总值的比例",
+						},
+						{
+							name: "insurance_ratio",
+							value: `${(totalCny === 0 ? 0 : (insuranceTotalCny / totalCny) * 100).toFixed(2)}%`,
+							description: "保险角色资产总值占资产总值的比例",
 						},
 						{
 							name: "non_cny_ratio",
