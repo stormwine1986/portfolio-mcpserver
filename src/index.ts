@@ -170,23 +170,27 @@ function createServer() {
 				const database = workerEnv.DB;
 				const { results } = await database
 					.prepare(
-						"SELECT symbol, COALESCE(SUM(shares * market_price), 0) AS amount FROM assets GROUP BY symbol",
+						"SELECT symbol, COALESCE(SUM(shares * market_price), 0) AS amount, COALESCE(SUM(CASE WHEN EXISTS (SELECT 1 FROM tags WHERE tags.name = assets.name AND tags.label = ?) THEN shares * market_price ELSE 0 END), 0) AS risk_amount FROM assets GROUP BY symbol",
 					)
-					.all<{ symbol: string | null; amount: number }>();
+					.bind("风险资产")
+					.all<{ symbol: string | null; amount: number; risk_amount: number }>();
 
-				const totals = new Map<string, number>();
+				const totals = new Map<string, { amount: number; riskAmount: number }>();
 				for (const row of results) {
 					if (!row.symbol || !["CNY", "USD", "BTC"].includes(row.symbol)) {
 						throw new Error("Assets contain an unsupported currency symbol");
 					}
-					totals.set(row.symbol, row.amount);
+					totals.set(row.symbol, { amount: row.amount, riskAmount: row.risk_amount });
 				}
 
-				let totalCny = totals.get("CNY") ?? 0;
-				const usdTotal = totals.get("USD") ?? 0;
-				const btcTotal = totals.get("BTC") ?? 0;
+				let totalCny = totals.get("CNY")?.amount ?? 0;
+				let riskTotalCny = totals.get("CNY")?.riskAmount ?? 0;
+				const usdTotal = totals.get("USD")?.amount ?? 0;
+				const usdRiskTotal = totals.get("USD")?.riskAmount ?? 0;
+				const btcTotal = totals.get("BTC")?.amount ?? 0;
+				const btcRiskTotal = totals.get("BTC")?.riskAmount ?? 0;
 
-				if (usdTotal !== 0 || btcTotal !== 0) {
+				if (usdTotal !== 0 || usdRiskTotal !== 0 || btcTotal !== 0 || btcRiskTotal !== 0) {
 					const fxResponse = await fetch("https://api.frankfurter.app/latest?from=USD&to=CNY", {
 						cache: "no-store",
 					});
@@ -198,8 +202,9 @@ function createServer() {
 						.parse(await fxResponse.json());
 					const usdCny = fxResult.rates.CNY;
 					totalCny += usdTotal * usdCny;
+					riskTotalCny += usdRiskTotal * usdCny;
 
-					if (btcTotal !== 0) {
+					if (btcTotal !== 0 || btcRiskTotal !== 0) {
 						const btcResponse = await fetch("https://api.coinbase.com/v2/prices/BTC-USD/spot", {
 							cache: "no-store",
 						});
@@ -220,10 +225,11 @@ function createServer() {
 							throw new Error("Coinbase returned an invalid BTC price");
 						}
 						totalCny += btcTotal * btcUsd * usdCny;
+						riskTotalCny += btcRiskTotal * btcUsd * usdCny;
 					}
 				}
 
-				if (!Number.isFinite(totalCny)) {
+				if (!Number.isFinite(totalCny) || !Number.isFinite(riskTotalCny)) {
 					throw new Error("Asset total is not finite");
 				}
 
@@ -233,6 +239,11 @@ function createServer() {
 							name: "total",
 							value: totalCny.toFixed(2),
 							description: "资产总计，以CNY计价",
+						},
+						{
+							name: "risk_exposure",
+							value: `${(totalCny === 0 ? 0 : (riskTotalCny / totalCny) * 100).toFixed(2)}%`,
+							description: "风险资产总值占资产总值的比例",
 						},
 					],
 				};
