@@ -124,6 +124,33 @@ function createServer() {
 	);
 
 	server.registerTool(
+		"list_assets",
+		{
+			description: "列出所有资产名称。",
+			inputSchema: z.object({}),
+			outputSchema: z.object({ assets: z.array(z.string()) }),
+		},
+		async () => {
+			try {
+				const { results } = await workerEnv.DB.prepare(
+					"SELECT name FROM assets ORDER BY name",
+				).all<{ name: string }>();
+				const output = { assets: results.map((row) => row.name) };
+
+				return {
+					content: [{ type: "text", text: JSON.stringify(output) }],
+					structuredContent: output,
+				};
+			} catch {
+				return {
+					content: [{ type: "text", text: "获取资产名称列表失败，请检查数据库后重试。" }],
+					isError: true,
+				};
+			}
+		},
+	);
+
+	server.registerTool(
 		"get_asserts_status",
 		{
 			description: "获取资产组合的状态，包括资产总值等",
