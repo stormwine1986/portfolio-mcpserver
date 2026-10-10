@@ -224,6 +224,105 @@ function createServer() {
 	);
 
 	server.registerTool(
+		"upsert_asset",
+		{
+			description: "按资产名称创建或更新资产；更新时只修改提供的字段，不修改标签。",
+			inputSchema: z.object({
+				name: z.string().trim().min(1),
+				shares: z.number().finite().optional(),
+				avg_cost_price: z.number().finite().optional(),
+				market_price: z.number().finite().optional(),
+				symbol: z.enum(["CNY", "USD", "BTC"]).nullable().optional(),
+				role: z.enum(["流动性", "生息", "养老", "保险"]).nullable().optional(),
+				remarks: z.string().nullable().optional(),
+				interest_rate: z.number().finite().nullable().optional(),
+			}),
+			outputSchema: z.object({
+				fields: z.array(
+					z.object({
+						name: z.string(),
+						value: z.string(),
+						description: z.string(),
+					}),
+				),
+			}),
+		},
+		async ({
+			name,
+			shares,
+			avg_cost_price,
+			market_price,
+			symbol,
+			role,
+			remarks,
+			interest_rate,
+		}) => {
+			try {
+				const now = new Date();
+				const updatedAt = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+					.toISOString()
+					.replace("T", " ")
+					.slice(0, 19);
+				const insertColumns = ["name", "shares", "avg_cost_price", "market_price", "updated_at"];
+				const values: (string | number | null)[] = [
+					name,
+					shares ?? 0,
+					avg_cost_price ?? 1,
+					market_price ?? 1,
+					updatedAt,
+				];
+				const updateColumns = ["updated_at"];
+
+				if (shares !== undefined) updateColumns.push("shares");
+				if (avg_cost_price !== undefined) updateColumns.push("avg_cost_price");
+				if (market_price !== undefined) updateColumns.push("market_price");
+
+				const optionalFields = [
+					{ column: "symbol", value: symbol },
+					{ column: "Role", value: role },
+					{ column: "remarks", value: remarks },
+					{ column: "interest_rate", value: interest_rate },
+				];
+				for (const { column, value } of optionalFields) {
+					if (value !== undefined) {
+						insertColumns.push(column);
+						updateColumns.push(column);
+						values.push(value);
+					}
+				}
+
+				const quoteColumn = (column: string) => `"${column}"`;
+				const assignments = updateColumns
+					.map((column) => `${quoteColumn(column)} = excluded.${quoteColumn(column)}`)
+					.join(", ");
+				await workerEnv.DB.prepare(
+					`INSERT INTO assets (${insertColumns.map(quoteColumn).join(", ")}) VALUES (${insertColumns.map(() => "?").join(", ")}) ON CONFLICT(name) DO UPDATE SET ${assignments}`,
+				)
+					.bind(...values)
+					.run();
+
+				const output = {
+					fields: [
+						{ name: "name", value: name, description: "资产名称" },
+						{ name: "updated_at", value: updatedAt, description: "最后更新时间（UTC+8）" },
+						{ name: "result", value: "upserted", description: "资产已创建或更新" },
+					],
+				};
+
+				return {
+					content: [{ type: "text", text: JSON.stringify(output) }],
+					structuredContent: output,
+				};
+			} catch {
+				return {
+					content: [{ type: "text", text: "创建或更新资产失败，请检查数据库后重试。" }],
+					isError: true,
+				};
+			}
+		},
+	);
+
+	server.registerTool(
 		"create_baseline",
 		{
 			description: "创建或更新当日资产基线，总值以 CNY 计价。",

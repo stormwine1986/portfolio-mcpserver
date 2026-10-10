@@ -54,11 +54,15 @@ Restart Claude and you should see the tools become available.
 
 ```sql
 TABLE "assets"(
-  "name" TEXT NOT NULL, -- 资产名称
-  "shares" REAL NOT NULL, -- 份额
-  "avg_cost_price" REAL NOT NULL, -- 平均成本价格
-  "market_price" REAL NOT NULL, -- 市场价
-  "updated_at" TEXT NOT NULL, "symbol" TEXT, "Role" TEXT, "remarks" TEXT, "interest_rate" REAL,
+  "name" TEXT NOT NULL, -- 资产名称,资产名称的格式应该为 基金公司|银行|交易所_资产名称
+  "shares" REAL NOT NULL, -- 份额,默认为 0
+  "avg_cost_price" REAL NOT NULL, -- 平均成本价格,默认为 1
+  "market_price" REAL NOT NULL, -- 市场价，默认为 1
+  "updated_at" TEXT NOT NULL, -- 自动填写当前UTC+8时间
+  "symbol" TEXT, -- 币种
+  "Role" TEXT, -- 可选值范围：流动性，生息，养老，保险；
+  "remarks" TEXT, 
+  "interest_rate" REAL, -- 生息资产的期望年化利润
   PRIMARY KEY ("name")
 )
 ```
@@ -73,5 +77,12 @@ TABLE "baseline"(
   "total" REAL, -- 资产总值，以 CNY 计价
   "created_at" TEXT, -- 创建时间，格式 2026-10-01 00:00:00
   PRIMARY KEY ("baseline")
+)
+```
+
+```sql
+TABLE "tags"(
+  "name" TEXT, -- 必填，资产名称
+  "label" TEXT -- 必填，标签名
 )
 ```
