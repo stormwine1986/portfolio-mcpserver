@@ -185,6 +185,7 @@ function createServer() {
 
 				let totalCny = totals.get("CNY")?.amount ?? 0;
 				let riskTotalCny = totals.get("CNY")?.riskAmount ?? 0;
+				let nonCnyTotalCny = 0;
 				const usdTotal = totals.get("USD")?.amount ?? 0;
 				const usdRiskTotal = totals.get("USD")?.riskAmount ?? 0;
 				const btcTotal = totals.get("BTC")?.amount ?? 0;
@@ -201,7 +202,9 @@ function createServer() {
 						.object({ rates: z.object({ CNY: z.number().positive() }) })
 						.parse(await fxResponse.json());
 					const usdCny = fxResult.rates.CNY;
-					totalCny += usdTotal * usdCny;
+					const usdTotalCny = usdTotal * usdCny;
+					nonCnyTotalCny += usdTotalCny;
+					totalCny += usdTotalCny;
 					riskTotalCny += usdRiskTotal * usdCny;
 
 					if (btcTotal !== 0 || btcRiskTotal !== 0) {
@@ -224,12 +227,18 @@ function createServer() {
 						if (!Number.isFinite(btcUsd) || btcUsd <= 0) {
 							throw new Error("Coinbase returned an invalid BTC price");
 						}
-						totalCny += btcTotal * btcUsd * usdCny;
+						const btcTotalCny = btcTotal * btcUsd * usdCny;
+						nonCnyTotalCny += btcTotalCny;
+						totalCny += btcTotalCny;
 						riskTotalCny += btcRiskTotal * btcUsd * usdCny;
 					}
 				}
 
-				if (!Number.isFinite(totalCny) || !Number.isFinite(riskTotalCny)) {
+				if (
+					!Number.isFinite(totalCny) ||
+					!Number.isFinite(riskTotalCny) ||
+					!Number.isFinite(nonCnyTotalCny)
+				) {
 					throw new Error("Asset total is not finite");
 				}
 
@@ -244,6 +253,11 @@ function createServer() {
 							name: "risk_exposure",
 							value: `${(totalCny === 0 ? 0 : (riskTotalCny / totalCny) * 100).toFixed(2)}%`,
 							description: "风险资产总值占资产总值的比例",
+						},
+						{
+							name: "non_cny_ratio",
+							value: `${(totalCny === 0 ? 0 : (nonCnyTotalCny / totalCny) * 100).toFixed(2)}%`,
+							description: "非CNY资产总值占资产总值的比例（按CNY折算）",
 						},
 					],
 				};
